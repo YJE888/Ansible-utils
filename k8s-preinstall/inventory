@@ -1,0 +1,24 @@
+[all]
+master1 ansible_host=10.10.10.
+master2 ansible_host=10.10.10.
+master3 ansible_host=10.10.10.
+worker1 ansible_host=10.10.10.
+worker2 ansible_host=10.10.10.
+worker3 ansible_host=10.10.10.
+
+[gpu]
+2060-1 ansible_host=10.10.10.
+3060-1 ansible_host=10.10.10.
+
+[all:vars]
+ansible_ssh_user=일반서버_ID_입력
+ansible_ssh_pass=일반서버_PASSWORD_입력
+
+## Please check variable  
+docker_package_version=docker-ce-20.10.16-3.ce
+kubernetes_package_version=1.23-2
+install_package=true
+
+[gpu:vars]
+ansible_ssh_user=GPU서버_ID_입력
+ansible_ssh_pass=GPU서버_PASSWORD_입력
