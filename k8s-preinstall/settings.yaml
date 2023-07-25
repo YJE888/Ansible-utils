@@ -1,0 +1,36 @@
+# nfs client 패키지 설치, harbor password file 생성, 시간 설정
+---
+- name: Kubernetes Node Settings
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: Install NFS Client Packages
+    package:
+      name:
+        - nfs-utils
+        - libnfsidmap
+      state: latest
+  
+  - name: Start NFS Client Service
+    service:
+      name: rpcbind
+      state: started
+      enabled: yes
+
+  - name: Create Harbor Password Dir
+    file:
+      path: /root/repo
+      state: directory
+      mode: '0755'
+  - name: Create Harbor Password File
+    file:
+      path: /root/repo/my_password.txt
+      state: touch
+  - name: Insert String in Harbor File
+    lineinfile:
+      path: /root/repo/my_password.txt
+      line: "{harbor password 입력}"
+   
+  - name: Set local timezone to Asia/Seoul
+    timezone:
+      name: Asia/Seoul
