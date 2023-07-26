@@ -1,9 +1,10 @@
+# cluster의 cluster-preinstall.yaml을 실행한 후에 해당 yaml 실행
+# cluster의 inventory에 gpu 필드 제외하고 모두 주석표시 후 사용
 ---
 - name: GPU Node Preinstaller
   hosts: gpu
   tasks:
 
-# cluster의 cluster-preinstall.yaml을 실행한 후에 해당 yaml 실행
 # Configuration Nvidia Docker Service     
   - name: remove packages
     yum:
