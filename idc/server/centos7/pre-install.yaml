@@ -1,0 +1,120 @@
+---
+# 인터페이스에 공인 IP가 설정되어있어야하므로, Change_ip.yaml 실행 한 다음 해당 파일 실행
+# ansible-playbook -i 공인IP, -e "ansible_ssh_user=root ansible_ssh_pass=test123!" pre-install.yaml
+- name: CentOS 7 Settings
+  hosts: all
+  vars:
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+    timestamp: "{{ lookup('pipe', 'date +\"%Y-%m-%d %H:%M:%S\"') }}"
+  tasks:
+  - name: Disable SELinux
+    selinux:
+      state: disabled
+
+  - name: upgrade all packages
+    yum:
+      name: '*'
+      state: latest
+      skip_broken: yes
+      
+  - name: Install Requirement Package
+    yum:
+      name: 
+        - chrony
+        - net-tools
+        - sysstat
+        - psmisc
+        - vim
+        - gcc
+        - git
+          #        - jq # 설치하려면 추가 저장소 필요
+          #- pkg-config
+        - curl
+        - clang
+        - hwloc
+        - wget
+          #        - zstd
+        - python3-pip
+      state: latest
+      
+  - name: Start 'chronyd' Service    
+    service:
+      name: chronyd
+      enabled: yes
+      state: started
+
+  - name: Add alias vi=vim to /etc/bashrc
+    shell: |
+        echo "alias vi=vim" >> /etc/bashrc
+        echo 'export HISTTIMEFORMAT="%d/%m/%y %T "' >> /etc/bashrc
+        source /etc/bashrc
+    args:
+        executable: /bin/bash
+    ignore_errors: yes
+
+  - name: Set timezone to Asia/Seoul
+    timezone:
+      name: Asia/Seoul
+
+  - name: Set hostname
+    hostname:
+      name: localhost
+
+  - name: Delete multiple users
+    user:
+      name: "{{ item }}"
+      state: absent
+      remove: no
+    with_items:
+      - lp
+      - sync
+      - shutdown
+      - halt
+      - games
+    
+  - name: Delete multiple groups
+    group:
+      name: "{{ item }}"
+      state: absent
+    with_items:
+      - games
+      - tape
+
+  - name: Delete multiple files
+    file:
+      path: /root/{{ item }}
+      state: absent
+    with_items:
+      - install-callhome.post.log
+      - install.post.log
+      - install.postnochroot.log
+      - original-ks.cfg
+
+  - name: Reboot the machine
+    reboot:
+      reboot_timeout: 180
+  
+  - name: Generate a random password
+    set_fact:
+      root_password: "{{ lookup('password', '/dev/null length=13 chars=ascii_letters,digits') }}"
+
+  - name: Change root password
+    user:
+      name: root
+      password: "{{ root_password | password_hash('sha512') }}"
+
+  - name: Display the new root password
+    debug:
+      msg: "The new root password is: {{ root_password }}"
+
+  - name: Get IP
+    command: hostname -I
+    register: ip_address
+
+  - name: Save the new root password
+    delegate_to: localhost
+    run_once: true
+    lineinfile:
+      path: /root/ansible/password
+      create: yes
+      line: "{{ timestamp }} - IP : {{ ip_address.stdout }} - Password: {{ root_password }}"
