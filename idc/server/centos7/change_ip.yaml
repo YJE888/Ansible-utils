@@ -1,0 +1,59 @@
+---
+# 변수로 pri_ip, pub_ip 사용
+# 사용예시 : ansible-playbook -i 192.168.10.149, nic.yaml -e "ansible_ssh_user=root ansible_ssh_pass=qwer1234! pri_ip=192.168.10.149 pub_ip=공인IP pub_net=255.255.255.192 pub_gw=공인IP GW pub_dns=8.8.8.8"
+
+- name: Change IP
+  hosts: all
+  # 불특정한 서버를 계속해서 접속해야되는 상황에서 IP가 변경될때마다 키값이 변경됐다는 에러로 인해 접속이 불가능
+  vars:
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+  tasks:
+  # 네트워크 정보 수집
+    - name: Gather network facts
+      setup:
+        gather_subset:
+          - network
+  # 수집된 정보에서 IP가 설정된 인터페이스의 이름 확인 후 interface_with_ip에 저장
+    - name: Find the interface
+      set_fact:
+        interface_with_ip: >-
+          {{
+            ansible_facts | dict2items | selectattr('value.ipv4.address', 'defined') | selectattr('value.ipv4.address', 'equalto', pri_ip) | map(attribute='key') | list | first
+          }}
+  # 상단에서 확인한 인터페이스명으로 파일 설정
+    - name: Remove DOMAIN lines
+      lineinfile:
+        path: /etc/sysconfig/network-scripts/ifcfg-{{ interface_with_ip }}
+        regexp: '^(DOMAIN=|SEARCH=)'
+        state: absent
+    - name: change bootproto
+      lineinfile:
+        path: /etc/sysconfig/network-scripts/ifcfg-{{ interface_with_ip }}
+        regexp: '^BOOTPROTO='
+        line: 'BOOTPROTO=static'
+    - name: add ipaddr
+      lineinfile:
+        path: /etc/sysconfig/network-scripts/ifcfg-{{ interface_with_ip }}
+        line: 'IPADDR={{ pub_ip }}'
+      
+    - name: add netmask
+      lineinfile:
+        path: /etc/sysconfig/network-scripts/ifcfg-{{ interface_with_ip }}
+        line: 'NETMASK={{ pub_net }}'
+
+    - name: add gateway
+      lineinfile:
+        path: /etc/sysconfig/network-scripts/ifcfg-{{ interface_with_ip }}
+        line: 'GATEWAY={{ pub_gw }}'
+    
+    - name: add dns
+      lineinfile:
+        path: /etc/sysconfig/network-scripts/ifcfg-{{ interface_with_ip }}
+        line: 'DNS1={{ pub_dns }}'
+
+    - name: Restart network service for interface eth0
+      ansible.builtin.service:
+        name: network
+        state: restarted
+      async: 100
+      poll: 0
