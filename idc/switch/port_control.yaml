@@ -1,0 +1,77 @@
+# port_num, state, qos_name, old_qos_name, new_qos_name을 변수로 받음
+# 신규설치 시 실행 방법:  ansible-playbook -i inventory port_control.yaml -e "port_num=14 state='no shutdown' qos_name='[QoS_20M]'"
+# QoS 변경 시 실행 방법:  ansible-playbook -i inventory port_control.yaml -e "port_num=14 old_qos_name='[QoS_20M]' new_qos_name='[QoS_30M]'"
+---
+- name: Port Control
+  hosts: all
+  gather_facts: False
+  # 변수값이 설정되지 않았을 때 "" 을 기본값으로 설정
+  vars:
+    state: ""
+    qos_name: ""
+    old_qos_name: ""
+    new_qos_name: ""
+    vlan_id: ""
+  tasks:
+    - name: Get interface status
+      cisco.ios.ios_command:
+        commands:
+          - show interface status
+      register: interface_status
+
+# 포트 특정 (ex gi 0/1, gi 1/1, gi 1/0/3, gi 0/0/3.. ) 
+# fa의 경우도 추가 필요할지도?
+    - name: Extract Port name
+      set_fact:
+        port_name: >-
+          {{
+            interface_status.stdout_lines[0] | 
+            map('regex_search', '^(\S+)') | 
+            select('search', 'Gi[0-9]/[0-9]/' ~ port_num | string ) |
+            list +
+            interface_status.stdout_lines[0] | 
+            map('regex_search', '^(\S+)') | 
+            select('search', 'Gi[0-9]/' ~ port_num | string ) | 
+            list
+          }}
+
+# 인터페이스 상태 변경 (shutdown, no shutdown)
+    - name: make "{{ port_name[0] }}" interface "{{ state }}"
+      when: state != ""
+      cisco.ios.ios_config:
+        lines:
+          - interface {{ port_name[0] }}
+          - "{{ state }}"
+# 인터페이스에 QoS 설정
+    - name: apply qos
+      when: state == "no shutdown"
+      cisco.ios.ios_config:
+        lines:
+          - service-policy input "{{ qos_name }}"
+        parents: interface {{ port_name[0] }}
+# 인터페이스에 설정된 QoS 변경
+    - name: change qos
+      when: old_qos_name != "" or new_qos_name != ""
+      cisco.ios.ios_config:
+        lines:
+          - no service-policy input "{{ old_qos_name }}"
+          - service-policy input "{{ new_qos_name }}"
+        parents: interface {{ port_name[0] }}
+# 인터페이스에 vlan 할당
+    - name: assign vlan {{ vlan_id }}
+      when: vlan_id != ""
+      cisco.ios.ios_config:
+        lines:
+          - switchport mode access
+          - switchport access vlan {{ vlan_id }}
+        parents: interface {{ port_name[0] }}
+# 인터페이스 상태 확인 후 register에 입력
+    - name: interface status
+      cisco.ios.ios_command:
+        commands:
+          - show run interface {{ port_name[0] }}
+      register: output
+# register에 입력된 인터페이스 상태 출력
+    - name: Print "{{ port_name[0] }}"interface status
+      debug:
+        var: output.stdout_lines
