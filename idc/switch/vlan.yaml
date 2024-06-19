@@ -1,0 +1,20 @@
+---
+- name: Cisco create VLAN
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: create vlan
+      cisco.ios.ios_vlans:
+        config:
+        - name: VLAN 20
+          vlan_id: 20
+          state: active
+
+    - name: show vlan
+      ios_command:
+        commands: show vlan
+      register: vlan_info
+
+    - name: print vlan
+      debug:
+        var: vlan_info.stdout_lines
